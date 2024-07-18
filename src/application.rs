@@ -29,6 +29,14 @@ mod imp {
             obj.setup_gactions();
             obj.set_accels_for_action("app.quit", &["<primary>q"]);
         }
+
+        fn dispose(&self) {
+            println!("App destructor");
+        }
+
+        fn finalize(&self) {
+            println!("Window obj finalize!");
+        }
     }
 
     impl ApplicationImpl for ControlPanelGuiApplication {
