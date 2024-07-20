@@ -33,10 +33,6 @@ mod imp {
         fn dispose(&self) {
             println!("App destructor");
         }
-
-        fn finalize(&self) {
-            println!("Window obj finalize!");
-        }
     }
 
     impl ApplicationImpl for ControlPanelGuiApplication {
@@ -59,10 +55,6 @@ mod imp {
             // Ask the window manager/compositor to present the window
             window.present();
         }
-
-        //fn startup(&self) {
-        //    println!("StartUp!");
-        //}
     }
 
     impl GtkApplicationImpl for ControlPanelGuiApplication {}

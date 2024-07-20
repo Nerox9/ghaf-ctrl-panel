@@ -1,6 +1,5 @@
 
 use std::cell::{Ref, RefCell};
-//use std::rc::Rc;
 use gtk::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib, CompositeTemplate, Stack, Image, Button, MenuButton, Box, ListView, SingleSelection, SignalListItemFactory, ListItem,};
@@ -123,29 +122,17 @@ impl ControlPanelGuiWindow {
     fn init(&self) {
         self.set_destroy_with_parent(true);
 
+        self.connect_close_request(glib::clone!(@strong self as window => move |_| {
+            println!("Delete event");    
+            window.imp().data_provider.borrow().disconnect();
+            window.application().expect("Failed to get application").quit();
+            glib::Propagation::Stop // Returning Stop allows the window to be destroyed
+        }));
+
         self.connect_destroy(glib::clone!(@strong self as window => move |_| {
             println!("Connect destroy");
             //drop(data_provider);
         }));
-        /* //Block was left here as signal connection example
-        let imp = imp::ControlPanelGuiWindow::from_instance(self);
-
-        // Connect signals here
-        //Tab button signals
-        imp.vm_view_button.connect_clicked(glib::clone!(@strong self as window => move |_| {
-            window.switch_to_vm_view();
-        }));
-        imp.settings_view_button.connect_clicked(glib::clone!(@strong self as window => move |_| {
-            window.switch_to_settings_view();
-        }));
-        // List box signals
-        imp.list_box.connect_row_selected(glib::clone!(@strong self as window => move |_, row| {
-            window.on_vm_list_row_selected(row);
-        }));
-        imp.settings_list_box.connect_row_selected(glib::clone!(@strong self as window => move |_, row| {
-            window.on_settings_list_row_selected(row);
-        }));
-        */
     }
 
     fn setup_vm_rows(&self) {
