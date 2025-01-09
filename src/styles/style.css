@@ -595,6 +595,13 @@ entry>text {
   color: #FFFFFF;
 }
 
+/*Textview*/
+
+textview text{
+  background-color: #353535;
+  color: #3ce85c;
+}
+
 /*Tab widget (GtkNotebook)*/
 .tab-widget {
   background-color: #2B2B2B;

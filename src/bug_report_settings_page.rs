@@ -1,14 +1,16 @@
-use crate::github::create_github_issue;
+use crate::github::{create_github_issue, set_config, login_start, update_config_file, get_token};
 use chrono::Utc;
 use glib::subclass::Signal;
 use glib::{Binding, Properties};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{glib, Box, Button, CheckButton, CompositeTemplate, Entry, Label};
+use gtk::{glib, Box, Button, CheckButton, CompositeTemplate, Entry, Label, TextView};
 use std::cell::RefCell;
 use std::fs;
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
+use github_auth::{Authenticator, Scope};
+
 
 //use crate::vm_gobject::VMGObject; will be used in the future
 use crate::settings_gobject::SettingsGObject;
@@ -36,13 +38,15 @@ mod imp {
         #[template_child]
         pub entry_3: TemplateChild<Entry>,
         #[template_child]
-        pub a_4: TemplateChild<Entry>,
+        pub title: TemplateChild<Entry>,
         #[template_child]
-        pub a_5: TemplateChild<Entry>,
+        pub description: TemplateChild<TextView>,
         #[template_child]
-        pub a_6: TemplateChild<Entry>,
+        pub reporter: TemplateChild<Entry>,
         #[template_child]
-        pub a_7: TemplateChild<Entry>,
+        pub ghaf_version: TemplateChild<Entry>,
+        #[template_child]
+        pub email: TemplateChild<Entry>,
         #[template_child]
         pub other_1: TemplateChild<CheckButton>,
         #[template_child]
@@ -50,19 +54,21 @@ mod imp {
         #[template_child]
         pub other_3: TemplateChild<CheckButton>,
         #[template_child]
-        pub required_1: TemplateChild<Label>,
+        pub required_issue: TemplateChild<Label>,
         #[template_child]
-        pub required_2: TemplateChild<Label>,
+        pub required_related: TemplateChild<Label>,
         #[template_child]
-        pub required_3: TemplateChild<Label>,
+        pub required_app: TemplateChild<Label>,
         #[template_child]
-        pub required_4: TemplateChild<Label>,
+        pub required_title: TemplateChild<Label>,
         #[template_child]
-        pub required_5: TemplateChild<Label>,
+        pub required_description: TemplateChild<Label>,
         #[template_child]
-        pub required_6: TemplateChild<Label>,
+        pub required_reporter: TemplateChild<Label>,
         #[template_child]
-        pub required_7: TemplateChild<Label>,
+        pub required_version: TemplateChild<Label>,
+        #[template_child]
+        pub required_email: TemplateChild<Label>,
         #[template_child]
         pub summary: TemplateChild<Label>,
 
@@ -93,19 +99,19 @@ mod imp {
     #[gtk::template_callbacks]
     impl BugReportSettingsPage {
         #[template_callback]
-        fn entry_1_focused(&self, entry: &Entry) {
+        fn entry_1_focused(&self) {
             if !self.other_1.is_active() {
                 self.other_1.set_active(true);
             };
         }
         #[template_callback]
-        fn entry_2_focused(&self, entry: &Entry) {
+        fn entry_2_focused(&self) {
             if !self.other_2.is_active() {
                 self.other_2.set_active(true);
             };
         }
         #[template_callback]
-        fn entry_3_focused(&self, entry: &Entry) {
+        fn entry_3_focused(&self) {
             if !self.other_3.is_active() {
                 self.other_3.set_active(true);
             };
@@ -157,10 +163,11 @@ mod imp {
         fn on_submit(&self, button: &Button) {
             let mut enable = true;
             let mac_address_path = "/tmp/MACAddress";
-            let description = self.a_4.text().to_string();
-            let version = self.a_5.text().to_string();
-            let reporter = self.a_6.text().to_string();
-            let email = self.a_7.text().to_string();
+            let title = self.title.text().to_string();
+            let description = self.description.buffer().to_string();
+            let version = self.reporter.text().to_string();
+            let reporter = self.ghaf_version.text().to_string();
+            let email = self.email.text().to_string();
 
             let time = Utc::now().to_string();
 
@@ -186,74 +193,128 @@ mod imp {
 
             if issue.is_empty() {
                 enable = false;
-                self.required_1.set_visible(true);
+                self.required_issue.set_visible(true);
                 eprintln!("Issue is not selected");
             } else {
-                self.required_1.set_visible(false);
+                self.required_issue.set_visible(false);
             }
 
             if related.is_empty() {
                 enable = false;
-                self.required_2.set_visible(true);
+                self.required_related.set_visible(true);
                 eprintln!("Related is not selected");
             } else {
-                self.required_2.set_visible(false);
+                self.required_related.set_visible(false);
             }
 
             if app.is_empty() {
                 if related == "App" {
                     enable = false;
-                    self.required_3.set_visible(true);
+                    self.required_app.set_visible(true);
                 }
                 eprintln!("App is not selected");
             } else {
-                self.required_3.set_visible(false);
+                self.required_app.set_visible(false);
+            }
+
+            if title.is_empty() {
+                enable = false;
+                self.required_title.set_visible(true);
+                eprintln!("Title is empty");
+            } else {
+                self.required_title.set_visible(false);
             }
 
             if description.is_empty() {
                 enable = false;
-                self.required_4.set_visible(true);
+                self.required_description.set_visible(true);
                 eprintln!("Description is empty");
             } else {
-                self.required_4.set_visible(false);
+                self.required_description.set_visible(false);
             }
 
             if version.is_empty() {
                 enable = false;
-                self.required_5.set_visible(true);
+                self.required_reporter.set_visible(true);
                 eprintln!("Version is empty");
             } else {
-                self.required_5.set_visible(false);
+                self.required_reporter.set_visible(false);
             }
 
             if reporter.is_empty() {
                 enable = false;
-                self.required_6.set_visible(true);
+                self.required_version.set_visible(true);
                 eprintln!("Reporter is empty");
             } else {
-                self.required_6.set_visible(false);
+                self.required_version.set_visible(false);
             }
 
             if email.is_empty() {
                 enable = false;
-                self.required_7.set_visible(true);
+                self.required_email.set_visible(true);
                 eprintln!("Email is empty");
             } else if !email.contains('@') {
                 enable = false;
-                self.required_7.set_visible(true);
+                self.required_email.set_visible(true);
                 eprintln!("Please enter a valid email");
             } else {
-                self.required_7.set_visible(false);
+                self.required_email.set_visible(false);
             }
 
-            if enable {
+            if true { //enable {
+                let auth = Authenticator::builder("github_auth main example".into())
+                .scope(Scope::PublicRepo)
+                .build();
+
+                let token = auth.auth().unwrap();
+                println!("{:?}", token);
+
+                let location = auth.location();
+                println!("Token stored at: {:?}", location);
+
+                match set_config() {
+                    Ok(_) => println!("Config is set"),
+                    Err(e) => eprintln!("{e}"),
+                };
+
+                match get_token() {
+                    Some(t) => {
+
+                        println!("Token: {}", t);
+                        update_config_file(&t);
+                        set_config().unwrap();},
+                    _ => {
+                        let mut code = String::new();
+                        let login_rt = tokio::runtime::Runtime::new().unwrap();
+                        match login_rt.block_on(login_start()){
+                            Ok(c) => {code = c;},
+                            Err(e) => {
+                                self.summary.set_label("Github CLI failed to get auth code");
+                                self.summary.add_css_class("required-text");
+                                self.summary.remove_css_class("success-text");
+                                self.summary.set_visible(true);
+                            },
+                        };
+                        self.summary.set_label(format!("Github Code: {}",code));
+                        self.summary.remove_css_class("required-text");
+                        self.summary.add_css_class("success-text");
+                        self.summary.set_visible(true);
+                        // TODO: Copy to clipboard
+                        std::process::Command::new("xdg-open").env("PATH", "/usr/bin").arg("https://github.com/login/device").output();
+                        return;
+                    }
+                };
+
                 // Prepare email content with optional attachment
                 let mut email_body = format!(
                     "Time: {}\n\nBug Report\n\nFrom: {}\nEmail: {}\nMAC Address: {}\n SW Version: {}\nSystem Version: {}\n\nIssue: {}\nRelates to: {}\nApp: {}\n\nDescription:\n{}\nGhaf version: {}",
                     time, reporter, email, mac, sw, system, issue, related, app, description, version
                 );
+                let mut email_title = format!("{}: {}", issue, title);
+                
+
                 let rt = tokio::runtime::Runtime::new().unwrap();
-                match rt.block_on(create_github_issue(&email_body)) {
+                match rt.block_on(create_github_issue(&email_title, &email_body)) {
                     Ok(_) => {
                         self.summary.set_label("Report sent successfully");
                         self.summary.remove_css_class("required-text");

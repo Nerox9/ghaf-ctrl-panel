@@ -68,7 +68,9 @@
           postFixup = ''
             wrapProgram $out/bin/ctrl-panel \
               --prefix PATH : ${lib.makeBinPath [ pkgs.glibc ]} \
-              --prefix PATH : ${lib.makeBinPath [ pkgs.dmidecode ]}
+              --prefix PATH : ${lib.makeBinPath [ pkgs.dmidecode ]} \
+              --prefix PATH : ${lib.makeBinPath [ pkgs.gh ]} \
+              --prefix PATH : ${lib.makeBinPath [ pkgs.openssl ]}
           '';
         });
       in
